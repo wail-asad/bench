@@ -232,7 +232,7 @@ def setup_dev_instance(project: str):
 				check=True,
 			)
 			cprint(
-				"Please go through the Development Documentation: https://github.com/frappe/frappe_docker/tree/main/development to fully complete the setup.",
+				"Please go through the Development Documentation: https://github.com/frappe/frappe_docker/tree/main/docs/development.md to fully complete the setup.",
 				level=2,
 			)
 			logging.info("Development Setup completed")
