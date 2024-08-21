@@ -86,7 +86,7 @@ def install_python_dev_dependencies(bench_path=".", apps=None, verbose=False):
 	bench = Bench(bench_path)
 
 	if isinstance(apps, str):
-		apps = [apps]
+		apps = (apps,)
 	elif not apps:
 		apps = bench.get_installed_apps()
 
