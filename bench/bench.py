@@ -10,7 +10,7 @@ from typing import List, MutableSequence, TYPE_CHECKING, Union
 
 # imports - module imports
 import bench
-from bench.exceptions import AppNotInstalledError, InvalidRemoteException
+from bench.exceptions import AppNotInstalledError, InvalidRemoteException, ValidationError
 from bench.config.common_site_config import setup_config
 from bench.utils import (
 	UNSET_ARG,
@@ -122,6 +122,8 @@ class Bench(Base, Validator):
 		self.apps.sync()
 
 	def uninstall(self, app, no_backup=False, force=False):
+		if app == "frappe":
+			raise ValidationError("You cannot uninstall the app `frappe`")
 		from bench.app import App
 
 		if not force:
