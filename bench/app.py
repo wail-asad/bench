@@ -851,7 +851,7 @@ def install_resolved_deps(
 				shutil.rmtree(path_to_app)
 			else:
 				continue
-		app.install_resolved_apps(skip_assets=skip_assets, verbose=verbose)
+		app.install_resolved_apps(skip_assets=skip_assets, skip_frontend=skip_frontend, verbose=verbose)
 
 
 def new_app(app, no_git=None, bench_path="."):
