@@ -778,7 +778,7 @@ def get_app(
 		or overwrite
 		or click.confirm("Do you want to reinstall the existing application?")
 	):
-		app.install(verbose=verbose, skip_assets=skip_assets,skip_frontend=skip_frontend, restart_bench=restart_bench)
+		app.install(verbose=verbose, skip_assets=skip_assets, skip_frontend=skip_frontend, restart_bench=restart_bench)
 
 	app.set_cache(compress_artifacts)
 
