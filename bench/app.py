@@ -197,6 +197,7 @@ class App(AppMeta):
 	def install(
 		self,
 		skip_assets=False,
+		skip_frontend=False,
 		verbose=False,
 		resolved=False,
 		restart_bench=True,
@@ -219,6 +220,7 @@ class App(AppMeta):
 			bench_path=self.bench.name,
 			verbose=verbose,
 			skip_assets=skip_assets,
+			skip_frontend=skip_frontend,
 			restart_bench=restart_bench,
 			resolution=self.local_resolution
 		)
@@ -336,6 +338,7 @@ def get_app(
 	branch=None,
 	bench_path=".",
 	skip_assets=False,
+	skip_frontend=False,
 	verbose=False,
 	overwrite=False,
 	init_bench=False,
@@ -406,6 +409,7 @@ def get_app(
 			resolution,
 			bench_path=bench_path,
 			skip_assets=skip_assets,
+			skip_frontend=skip_frontend,
 			verbose=verbose,
 		)
 		return
@@ -433,7 +437,7 @@ def get_app(
 		or overwrite
 		or click.confirm("Do you want to reinstall the existing application?")
 	):
-		app.install(verbose=verbose, skip_assets=skip_assets, restart_bench=restart_bench)
+		app.install(verbose=verbose, skip_assets=skip_assets,skip_frontend=skip_frontend, restart_bench=restart_bench)
 
 
 def install_resolved_deps(
@@ -441,6 +445,7 @@ def install_resolved_deps(
 	resolution,
 	bench_path=".",
 	skip_assets=False,
+	skip_frontend=False,
 	verbose=False,
 ):
 	from bench.utils.app import check_existing_dir
@@ -535,6 +540,7 @@ def install_app(
 	no_cache=False,
 	restart_bench=True,
 	skip_assets=False,
+	skip_frontend=False,
 	resolution=[]
 ):
 	import bench.cli as bench_cli
@@ -558,7 +564,7 @@ def install_app(
 	if conf.get("developer_mode"):
 		install_python_dev_dependencies(apps=app, bench_path=bench_path, verbose=verbose)
 
-	if os.path.exists(os.path.join(app_path, "package.json")):
+	if not skip_frontend and os.path.exists(os.path.join(app_path, "package.json")):
 		bench.run("yarn install", cwd=app_path)
 
 	bench.apps.sync(app_name=app, required=resolution, branch=tag, app_dir=app_path)

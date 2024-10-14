@@ -33,6 +33,7 @@ def init(
 	skip_redis_config_generation=False,
 	clone_without_update=False,
 	skip_assets=False,
+	skip_frontend=False,
 	python="python3",
 	install_app=None,
 ):
@@ -81,6 +82,7 @@ def init(
 			branch=frappe_branch,
 			bench_path=path,
 			skip_assets=True,
+			skip_frontend=skip_frontend,
 			verbose=verbose,
 			resolve_deps=False,
 		)
@@ -96,6 +98,7 @@ def init(
 			branch=frappe_branch,
 			bench_path=path,
 			skip_assets=True,
+			skip_frontend=skip_frontend,
 			verbose=verbose,
 			resolve_deps=False,
 		)

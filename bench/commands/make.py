@@ -37,6 +37,7 @@ import click
 	help="Skip redis config generation if already specifying the common-site-config file",
 )
 @click.option("--skip-assets", is_flag=True, default=False, help="Do not build assets")
+@click.option("--skip-frontend", is_flag=True, default=False, help="Do not install frontend dependencies")
 @click.option(
 	"--install-app", help="Install particular app after initialization"
 )
@@ -54,6 +55,7 @@ def init(
 	clone_without_update,
 	ignore_exist=False,
 	skip_assets=False,
+	skip_frontend=False,
 	python="python3",
 	install_app=None,
 ):
@@ -79,6 +81,7 @@ def init(
 			skip_redis_config_generation=skip_redis_config_generation,
 			clone_without_update=clone_without_update,
 			skip_assets=skip_assets,
+			skip_frontend=skip_frontend,
 			python=python,
 			verbose=verbose,
 		)
@@ -130,6 +133,7 @@ def drop(path):
 @click.option("--branch", default=None, help="branch to checkout")
 @click.option("--overwrite", is_flag=True, default=False)
 @click.option("--skip-assets", is_flag=True, default=False, help="Do not build assets")
+@click.option("--skip-frontend", is_flag=True, default=False, help="Do not install frontend dependencies")
 @click.option(
 	"--init-bench", is_flag=True, default=False, help="Initialize Bench if not in one"
 )
@@ -145,6 +149,7 @@ def get_app(
 	name=None,
 	overwrite=False,
 	skip_assets=False,
+	skip_frontend=False,
 	init_bench=False,
 	resolve_deps=False,
 ):
@@ -155,6 +160,7 @@ def get_app(
 		git_url,
 		branch=branch,
 		skip_assets=skip_assets,
+		skip_frontend=skip_frontend,
 		overwrite=overwrite,
 		init_bench=init_bench,
 		resolve_deps=resolve_deps,
