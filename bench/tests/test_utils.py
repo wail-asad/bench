@@ -2,7 +2,6 @@ import os
 import shutil
 import subprocess
 import unittest
-from tabnanny import check
 
 from bench.app import App
 from bench.bench import Bench
@@ -21,8 +20,8 @@ class TestUtils(unittest.TestCase):
 					app.name == git_url,
 					app.branch == branch,
 					app.tag == branch,
-					app.is_url == True,
-					app.on_disk == False,
+					app.is_url is True,
+					app.on_disk is False,
 					app.org == "frappe",
 					app.url == git_url,
 				]
@@ -31,11 +30,19 @@ class TestUtils(unittest.TestCase):
 
 	def test_is_valid_frappe_branch(self):
 		with self.assertRaises(InvalidRemoteException):
-			is_valid_frappe_branch("https://github.com/frappe/frappe.git", frappe_branch="random-branch")
-			is_valid_frappe_branch("https://github.com/random/random.git", frappe_branch="random-branch")
+			is_valid_frappe_branch(
+				"https://github.com/frappe/frappe.git", frappe_branch="random-branch"
+			)
+			is_valid_frappe_branch(
+				"https://github.com/random/random.git", frappe_branch="random-branch"
+			)
 
-		is_valid_frappe_branch("https://github.com/frappe/frappe.git", frappe_branch="develop")
-		is_valid_frappe_branch("https://github.com/frappe/frappe.git", frappe_branch="v13.29.0")
+		is_valid_frappe_branch(
+			"https://github.com/frappe/frappe.git", frappe_branch="develop"
+		)
+		is_valid_frappe_branch(
+			"https://github.com/frappe/frappe.git", frappe_branch="v13.29.0"
+		)
 
 	def test_app_states(self):
 		bench_dir = "./sandbox"
@@ -49,7 +56,10 @@ class TestUtils(unittest.TestCase):
 		self.assertTrue(hasattr(fake_bench.apps, "states"))
 
 		fake_bench.apps.states = {
-			"frappe": {"resolution": {"branch": "develop", "commit_hash": "234rwefd"}, "version": "14.0.0-dev"}
+			"frappe": {
+				"resolution": {"branch": "develop", "commit_hash": "234rwefd"},
+				"version": "14.0.0-dev",
+			}
 		}
 		fake_bench.apps.update_apps_states()
 
@@ -65,7 +75,21 @@ class TestUtils(unittest.TestCase):
 			f.write("__version__ = '11.0'")
 
 		subprocess.run(["git", "add", "."], cwd=frappe_path, capture_output=True, check=True)
-		subprocess.run(["git", "commit", "-m", "temp"], cwd=frappe_path, capture_output=True, check=True)
+		subprocess.run(
+			["git", "config", "user.email", "bench-test_app_states@gha.com"],
+			cwd=frappe_path,
+			capture_output=True,
+			check=True,
+		)
+		subprocess.run(
+			["git", "config", "user.name", "App States Test"],
+			cwd=frappe_path,
+			capture_output=True,
+			check=True,
+		)
+		subprocess.run(
+			["git", "commit", "-m", "temp"], cwd=frappe_path, capture_output=True, check=True
+		)
 
 		fake_bench.apps.update_apps_states(app_name="frappe")
 
@@ -77,4 +101,6 @@ class TestUtils(unittest.TestCase):
 
 	def test_ssh_ports(self):
 		app = App("git@github.com:22:frappe/frappe")
-		self.assertEqual((app.use_ssh, app.org, app.repo), (True, "frappe", "frappe"))
+		self.assertEqual(
+			(app.use_ssh, app.org, app.repo, app.app_name), (True, "frappe", "frappe", "frappe")
+		)

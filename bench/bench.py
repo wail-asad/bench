@@ -1,6 +1,6 @@
 # imports - standard imports
 import subprocess
-import functools
+from functools import lru_cache
 import os
 import shutil
 import json
@@ -10,9 +10,10 @@ from typing import List, MutableSequence, TYPE_CHECKING, Union
 
 # imports - module imports
 import bench
-from bench.exceptions import AppNotInstalledError, InvalidRemoteException
+from bench.exceptions import AppNotInstalledError, InvalidRemoteException, ValidationError
 from bench.config.common_site_config import setup_config
 from bench.utils import (
+	UNSET_ARG,
 	paths_in_bench,
 	exec_cmd,
 	is_bench_directory,
@@ -29,11 +30,11 @@ from bench.utils.bench import (
 	restart_process_manager,
 	remove_backups_crontab,
 	get_venv_path,
-	get_virtualenv_path,
 	get_env_cmd,
 )
 from bench.utils.render import job, step
 from bench.utils.app import get_current_version
+from bench.app import is_git_repo
 
 
 if TYPE_CHECKING:
@@ -43,8 +44,8 @@ logger = logging.getLogger(bench.PROJECT_NAME)
 
 
 class Base:
-	def run(self, cmd, cwd=None):
-		return exec_cmd(cmd, cwd=cwd or self.cwd)
+	def run(self, cmd, cwd=None, _raise=True):
+		return exec_cmd(cmd, cwd=cwd or self.cwd, _raise=_raise)
 
 
 class Validator:
@@ -54,7 +55,7 @@ class Validator:
 		validate_app_installed_on_sites(app, bench_path=self.name)
 
 
-@functools.lru_cache(maxsize=None)
+@lru_cache(maxsize=None)
 class Bench(Base, Validator):
 	def __init__(self, path):
 		self.name = path
@@ -121,6 +122,8 @@ class Bench(Base, Validator):
 		self.apps.sync()
 
 	def uninstall(self, app, no_backup=False, force=False):
+		if app == "frappe":
+			raise ValidationError("You cannot uninstall the app `frappe`")
 		from bench.app import App
 
 		if not force:
@@ -130,9 +133,10 @@ class Bench(Base, Validator):
 		except InvalidRemoteException:
 			if not force:
 				raise
+
 		self.apps.sync()
 		# self.build() - removed because it seems unnecessary
-		self.reload()
+		self.reload(_raise=False)
 
 	@step(title="Building Bench Assets", success="Bench Assets Built")
 	def build(self):
@@ -140,25 +144,29 @@ class Bench(Base, Validator):
 		run_frappe_cmd("build", bench_path=self.name)
 
 	@step(title="Reloading Bench Processes", success="Bench Processes Reloaded")
-	def reload(self, web=False, supervisor=True, systemd=True):
-		"""If web is True, only web workers are restarted
-		"""
+	def reload(self, web=False, supervisor=True, systemd=True, _raise=True):
+		"""If web is True, only web workers are restarted"""
 		conf = self.conf
 
 		if conf.get("developer_mode"):
 			restart_process_manager(bench_path=self.name, web_workers=web)
-		if supervisor and conf.get("restart_supervisor_on_update"):
-			restart_supervisor_processes(bench_path=self.name, web_workers=web)
+		if supervisor or conf.get("restart_supervisor_on_update"):
+			restart_supervisor_processes(bench_path=self.name, web_workers=web, _raise=_raise)
 		if systemd and conf.get("restart_systemd_on_update"):
-			restart_systemd_processes(bench_path=self.name, web_workers=web)
+			restart_systemd_processes(bench_path=self.name, web_workers=web, _raise=_raise)
 
 	def get_installed_apps(self) -> List:
-		"""Returns list of installed apps on bench, not in excluded_apps.txt
-		"""
-		apps = [app for app in self.apps if app not in self.excluded_apps]
-		apps.remove("frappe")
-		apps.insert(0, "frappe")
-		return apps
+		"""Returns list of installed apps on bench, not in excluded_apps.txt"""
+		try:
+			installed_packages = get_cmd_output(f"{self.python} -m pip freeze", cwd=self.name)
+		except Exception:
+			installed_packages = []
+
+		return [
+			app
+			for app in self.apps
+			if app not in self.excluded_apps and app in installed_packages
+		]
 
 
 class BenchApps(MutableSequence):
@@ -171,18 +179,20 @@ class BenchApps(MutableSequence):
 
 	def set_states(self):
 		try:
-			with open(self.states_path, "r") as f:
+			with open(self.states_path) as f:
 				self.states = json.loads(f.read() or "{}")
 		except FileNotFoundError:
 			self.states = {}
 
 	def update_apps_states(
-			self,
-			app_dir: str = None,
-			app_name: Union[str, None] = None,
-			branch: Union[str, None] = None,
-			required: List = [],
+		self,
+		app_dir: str = None,
+		app_name: Union[str, None] = None,
+		branch: Union[str, None] = None,
+		required: List = UNSET_ARG,
 	):
+		if required == UNSET_ARG:
+			required = []
 		if self.apps and not os.path.exists(self.states_path):
 			# idx according to apps listed in apps.txt (backwards compatibility)
 			# Keeping frappe as the first app.
@@ -195,13 +205,10 @@ class BenchApps(MutableSequence):
 			print("Found existing apps updating states...")
 			for idx, app in enumerate(self.apps, start=1):
 				self.states[app] = {
-					"resolution": {
-					"commit_hash": None,
-					"branch": None
-				},
-				"required": required,
-				"idx": idx,
-				"version": get_current_version(app, self.bench.name),
+					"resolution": {"commit_hash": None, "branch": None},
+					"required": required,
+					"idx": idx,
+					"version": get_current_version(app, self.bench.name),
 				}
 
 		apps_to_remove = []
@@ -219,23 +226,30 @@ class BenchApps(MutableSequence):
 			version = get_current_version(app_name, self.bench.name)
 
 			app_dir = os.path.join(self.apps_path, app_dir)
-			if not branch:
-				branch = (
-						subprocess
-						.check_output("git rev-parse --abbrev-ref HEAD", shell=True, cwd=app_dir)
+			is_repo = is_git_repo(app_dir)
+			if is_repo:
+				if not branch:
+					branch = (
+						subprocess.check_output(
+							"git rev-parse --abbrev-ref HEAD", shell=True, cwd=app_dir
+						)
 						.decode("utf-8")
 						.rstrip()
-						)
+					)
 
-			commit_hash = subprocess.check_output(f"git rev-parse {branch}", shell=True, cwd=app_dir).decode("utf-8").rstrip()
+				commit_hash = (
+					subprocess.check_output(f"git rev-parse {branch}", shell=True, cwd=app_dir)
+					.decode("utf-8")
+					.rstrip()
+				)
 
 			self.states[app_name] = {
-				"resolution": {
-					"commit_hash":commit_hash,
-					"branch": branch
-				},
-				"required":required,
-				"idx":len(self.states) + 1,
+				"is_repo": is_repo,
+				"resolution": "not a repo"
+				if not is_repo
+				else {"commit_hash": commit_hash, "branch": branch},
+				"required": required,
+				"idx": len(self.states) + 1,
 				"version": version,
 			}
 
@@ -247,53 +261,43 @@ class BenchApps(MutableSequence):
 		app_name: Union[str, None] = None,
 		app_dir: Union[str, None] = None,
 		branch: Union[str, None] = None,
-		required: List = []
+		required: List = UNSET_ARG,
 	):
+		if required == UNSET_ARG:
+			required = []
 		self.initialize_apps()
 
 		with open(self.bench.apps_txt, "w") as f:
 			f.write("\n".join(self.apps))
 
 		self.update_apps_states(
-			app_name=app_name,
-			app_dir=app_dir,
-			branch=branch,
-			required=required
+			app_name=app_name, app_dir=app_dir, branch=branch, required=required
 		)
 
 	def initialize_apps(self):
-		is_installed = lambda app: app in installed_packages
-
-		try:
-			installed_packages = get_cmd_output(f"{self.bench.python} -m pip freeze", cwd=self.bench.name)
-		except Exception:
-			self.apps = []
-			return
-
 		try:
 			self.apps = [
 				x
 				for x in os.listdir(os.path.join(self.bench.name, "apps"))
-				if (
-					is_frappe_app(os.path.join(self.bench.name, "apps", x))
-					and is_installed(x)
-				)
+				if is_frappe_app(os.path.join(self.bench.name, "apps", x))
 			]
+			self.apps.remove("frappe")
+			self.apps.insert(0, "frappe")
 		except FileNotFoundError:
 			self.apps = []
 
 	def __getitem__(self, key):
-		""" retrieves an item by its index, key"""
+		"""retrieves an item by its index, key"""
 		return self.apps[key]
 
 	def __setitem__(self, key, value):
-		""" set the item at index, key, to value """
+		"""set the item at index, key, to value"""
 		# should probably not be allowed
 		# self.apps[key] = value
 		raise NotImplementedError
 
 	def __delitem__(self, key):
-		""" removes the item at index, key """
+		"""removes the item at index, key"""
 		# TODO: uninstall and delete app from bench
 		del self.apps[key]
 
@@ -301,20 +305,20 @@ class BenchApps(MutableSequence):
 		return len(self.apps)
 
 	def insert(self, key, value):
-		""" add an item, value, at index, key. """
+		"""add an item, value, at index, key."""
 		# TODO: fetch and install app to bench
 		self.apps.insert(key, value)
 
 	def add(self, app: "App"):
 		app.get()
 		app.install()
-		super().append(app.repo)
+		super().append(app.app_name)
 		self.apps.sort()
 
 	def remove(self, app: "App", no_backup: bool = False):
 		app.uninstall()
 		app.remove(no_backup=no_backup)
-		super().remove(app.repo)
+		super().remove(app.app_name)
 
 	def append(self, app: "App"):
 		return self.add(app)
@@ -353,28 +357,28 @@ class BenchSetup(Base):
 		click.secho("Setting Up Environment", fg="yellow")
 
 		frappe = os.path.join(self.bench.name, "apps", "frappe")
-		virtualenv = get_virtualenv_path(verbose=verbose)
 		quiet_flag = "" if verbose else "--quiet"
 
 		if not os.path.exists(self.bench.python):
-			if virtualenv:
-				self.run(f"{virtualenv} {quiet_flag} env -p {python}")
-			else:
-				venv = get_venv_path(verbose=verbose)
-				self.run(f"{venv} env")
+			venv = get_venv_path(verbose=verbose, python=python)
+			self.run(f"{venv} env", cwd=self.bench.name)
 
 		self.pip()
+		self.wheel()
 
 		if os.path.exists(frappe):
-			self.run(f"{self.bench.python} -m pip install {quiet_flag} --upgrade -e {frappe}")
+			self.run(
+				f"{self.bench.python} -m pip install {quiet_flag} --upgrade -e {frappe}",
+				cwd=self.bench.name,
+			)
 
 	@step(title="Setting Up Bench Config", success="Bench Config Set Up")
-	def config(self, redis=True, procfile=True):
+	def config(self, redis=True, procfile=True, additional_config=None):
 		"""Setup config folder
 		- create pids folder
 		- generate sites/common_site_config.json
 		"""
-		setup_config(self.bench.name)
+		setup_config(self.bench.name, additional_config=additional_config)
 
 		if redis:
 			from bench.config.redis import generate_config
@@ -388,14 +392,28 @@ class BenchSetup(Base):
 
 	@step(title="Updating pip", success="Updated pip")
 	def pip(self, verbose=False):
-		"""Updates env pip; assumes that env is setup
-		"""
+		"""Updates env pip; assumes that env is setup"""
 		import bench.cli
 
 		verbose = bench.cli.verbose or verbose
 		quiet_flag = "" if verbose else "--quiet"
 
-		return self.run(f"{self.bench.python} -m pip install {quiet_flag} --upgrade pip")
+		return self.run(
+			f"{self.bench.python} -m pip install {quiet_flag} --upgrade pip", cwd=self.bench.name
+		)
+
+	@step(title="Installing wheel", success="Installed wheel")
+	def wheel(self, verbose=False):
+		"""Wheel is required for building old setup.py packages.
+		ref: https://github.com/pypa/pip/issues/8559"""
+		import bench.cli
+
+		verbose = bench.cli.verbose or verbose
+		quiet_flag = "" if verbose else "--quiet"
+
+		return self.run(
+			f"{self.bench.python} -m pip install {quiet_flag} wheel", cwd=self.bench.name
+		)
 
 	def logging(self):
 		from bench.utils import setup_logging
@@ -434,12 +452,10 @@ class BenchSetup(Base):
 
 	@job(title="Setting Up Bench Dependencies", success="Bench Dependencies Set Up")
 	def requirements(self, apps=None):
-		"""Install and upgrade specified / all installed apps on given Bench
-		"""
+		"""Install and upgrade specified / all installed apps on given Bench"""
 		from bench.app import App
 
-		if not apps:
-			apps = self.bench.get_installed_apps()
+		apps = apps or self.bench.apps
 
 		self.pip()
 
@@ -452,12 +468,10 @@ class BenchSetup(Base):
 			)
 
 	def python(self, apps=None):
-		"""Install and upgrade Python dependencies for specified / all installed apps on given Bench
-		"""
+		"""Install and upgrade Python dependencies for specified / all installed apps on given Bench"""
 		import bench.cli
 
-		if not apps:
-			apps = self.bench.get_installed_apps()
+		apps = apps or self.bench.apps
 
 		quiet_flag = "" if bench.cli.verbose else "--quiet"
 
@@ -469,8 +483,7 @@ class BenchSetup(Base):
 			self.run(f"{self.bench.python} -m pip install {quiet_flag} --upgrade -e {app_path}")
 
 	def node(self, apps=None):
-		"""Install and upgrade Node dependencies for specified / all apps on given Bench
-		"""
+		"""Install and upgrade Node dependencies for specified / all apps on given Bench"""
 		from bench.utils.bench import update_node_packages
 
 		return update_node_packages(bench_path=self.bench.name, apps=apps)

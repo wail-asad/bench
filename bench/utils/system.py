@@ -36,6 +36,7 @@ def init(
 	skip_frontend=False,
 	python="python3",
 	install_app=None,
+	dev=False,
 ):
 	"""Initialize a new bench directory
 
@@ -45,8 +46,8 @@ def init(
 	* setup config (dir/pids/redis/procfile) for the bench
 	* setup patches.txt for bench
 	* clone & install frappe
-		* install python & node dependencies
-		* build assets
+	        * install python & node dependencies
+	        * build assets
 	* setup backups crontab
 	"""
 
@@ -64,7 +65,14 @@ def init(
 	bench.setup.dirs()
 	bench.setup.logging()
 	bench.setup.env(python=python)
-	bench.setup.config(redis=not skip_redis_config_generation, procfile=not no_procfile)
+	config = {}
+	if dev:
+		config["developer_mode"] = 1
+	bench.setup.config(
+		redis=not skip_redis_config_generation,
+		procfile=not no_procfile,
+		additional_config=config,
+	)
 	bench.setup.patches()
 
 	# local apps
@@ -116,10 +124,7 @@ def setup_sudoers(user):
 	if not os.path.exists("/etc/sudoers.d"):
 		os.makedirs("/etc/sudoers.d")
 
-		set_permissions = False
-		if not os.path.exists("/etc/sudoers"):
-			set_permissions = True
-
+		set_permissions = not os.path.exists("/etc/sudoers")
 		with open("/etc/sudoers", "a") as f:
 			f.write("\n#includedir /etc/sudoers.d\n")
 
@@ -145,11 +150,7 @@ def setup_sudoers(user):
 
 
 def start(no_dev=False, concurrency=None, procfile=None, no_prefix=False, procman=None):
-	if procman:
-		program = which(procman)
-	else:
-		program = get_process_manager()
-
+	program = which(procman) if procman else get_process_manager()
 	if not program:
 		raise Exception("No process manager found")
 

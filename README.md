@@ -1,5 +1,8 @@
 <div align="center">
-	<img src="https://github.com/frappe/design/raw/master/logos/png/bench-logo.png" height="128">
+	<picture>
+		<source media="(prefers-color-scheme: dark)" srcset="https://github.com/frappe/design/raw/master/logos/png/bench-logo-dark.png">
+		<img src="https://github.com/frappe/design/raw/master/logos/png/bench-logo.png" height="128">
+	</picture>
 	<h2>Bench</h2>
 </div>
 
@@ -7,7 +10,7 @@ Bench is a command-line utility that helps you to install, update, and manage mu
 
 <div align="center">
 	<a target="_blank" href="https://www.python.org/downloads/" title="Python version">
-		<img src="https://img.shields.io/badge/python-%3E=_3.6-green.svg">
+		<img src="https://img.shields.io/badge/python-%3E=_3.8-green.svg">
 	</a>
 	<a target="_blank" href="https://app.travis-ci.com/github/frappe/bench" title="CI Status">
 		<img src="https://app.travis-ci.com/frappe/bench.svg?branch=develop">
@@ -28,18 +31,21 @@ Bench is a command-line utility that helps you to install, update, and manage mu
 
 ## Table of Contents
 
- - [Installation](#installation)
+- [Table of Contents](#table-of-contents)
+- [Installation](#installation)
 	- [Containerized Installation](#containerized-installation)
 	- [Easy Install Script](#easy-install-script)
+		- [Setup](#setup)
+		- [Arguments](#arguments)
+		- [Troubleshooting](#troubleshooting)
 	- [Manual Installation](#manual-installation)
- - [Usage](#basic-usage)
- - [Custom Bench commands](#custom-bench-commands)
- - [Bench Manager](#bench-manager)
- - [Guides](#guides)
- - [Resources](#resources)
- - [Development](#development)
- - [Releases](#releases)
- - [License](#license)
+- [Basic Usage](#basic-usage)
+- [Custom Bench Commands](#custom-bench-commands)
+- [Guides](#guides)
+- [Resources](#resources)
+- [Development](#development)
+- [Releases](#releases)
+- [License](#license)
 
 
 ## Installation
@@ -49,12 +55,11 @@ A typical bench setup provides two types of environments &mdash; Development and
 The setup for each of these installations can be achieved in multiple ways:
 
  - [Containerized Installation](#containerized-installation)
- - [Easy Install Script](#easy-install-script)
  - [Manual Installation](#manual-installation)
 
-We recommend using either the Docker Installation or the Easy Install Script to setup a Production Environment. For Development, you may choose either of the three methods to setup an instance.
+We recommend using Docker Installation to setup a Production Environment. For Development, you may choose either of the two methods to setup an instance.
 
-Otherwise, if you are looking to evaluate ERPNext, you can register for [a free trial on erpnext.com](https://erpnext.com/pricing).
+Otherwise, if you are looking to evaluate Frappe apps without hassle of hosting, you can try them [on frappecloud.com](https://frappecloud.com/).
 
 
 ### Containerized Installation
@@ -72,51 +77,49 @@ A quick setup guide for both the environments can be found below. For more detai
 
 ### Easy Install Script
 
-The Easy Install script should get you going with a Frappe/ERPNext setup with minimal manual intervention and effort. Since there are a lot of configurations being automatically setup, we recommend executing this script on a fresh server.
+The Easy Install script should get you going with a Frappe/ERPNext setup with minimal manual intervention and effort.
 
-**Note:** This script works only on GNU/Linux based server distributions, and has been designed and tested to work on Ubuntu 16.04+, CentOS 7+, and Debian-based systems.
-
-> This script installs Version 12 by default. It is untested with Version 13 and above. Containerized or manual installs are recommended for newer setups.
-
-#### Prerequisites
-
-You need to install the following packages for the script to run:
-
- - ##### Ubuntu and Debian-based Distributions:
-
-	```sh
-	$ apt install python3-minimal build-essential python3-setuptools
-	```
-
- - ##### CentOS and other RPM Distributions:
-
-	```sh
-	$ dnf groupinstall "Development Tools"
-	$ dnf install python3
-	```
+This script uses Docker with the [Frappe/ERPNext Docker Repository](https://github.com/frappe/frappe_docker) and can be used for both Development setup and Production setup.
 
 #### Setup
 
 Download the Easy Install script and execute it:
 
 ```sh
-$ wget https://raw.githubusercontent.com/frappe/bench/develop/install.py
-$ python3 install.py --production
+$ wget https://raw.githubusercontent.com/frappe/bench/develop/easy-install.py
+$ python3 easy-install.py --prod --email your@email.tld
 ```
 
-The script should then prompt you for the MySQL root password and an Administrator password for the Frappe/ERPNext instance, which will then be saved under `$HOME/passwords.txt` of the user used to setup the instance. This script will then install the required stack, setup bench and a default ERPNext instance.
+This script will install docker on your system and will fetch the required containers, setup bench and a default ERPNext instance.
 
-When the setup is complete, you will be able to access the system at `http://<your-server-ip>`, wherein you can use the administrator password to login.
+The script will generate MySQL root password and an Administrator password for the Frappe/ERPNext instance, which will then be saved under `$HOME/passwords.txt` of the user used to setup the instance.
+It will also generate a new compose file under `$HOME/<project-name>-compose.yml`.
+
+When the setup is complete, you will be able to access the system at `http://<your-server-ip>`, wherein you can use the Administrator password to login.
+
+#### Arguments
+
+Here are the arguments for the easy-install script
+
+```txt
+usage: easy-install.py [-h] [-p] [-d] [-s SITENAME] [-n PROJECT] [--email EMAIL]
+
+Install Frappe with Docker
+
+options:
+  -h, --help            		show this help message and exit
+  -p, --prod            		Setup Production System
+  -d, --dev             		Setup Development System
+  -s SITENAME, --sitename SITENAME      The Site Name for your production site
+  -n PROJECT, --project PROJECT         Project Name
+  --email EMAIL         		Add email for the SSL.
+```
 
 #### Troubleshooting
 
-In case the setup fails, the log file is saved under `/tmp/logs/install_bench.log`. You may then:
+In case the setup fails, the log file is saved under `$HOME/easy-install.log`. You may then
 
- - Create an Issue in this repository with the log file attached.
- - Search for an existing issue or post the log file on the [Frappe/ERPNext Discuss Forum](https://discuss.erpnext.com/c/bench) with the tag `installation_problem` under "Install/Update" category.
-
-For more information and advanced setup instructions, check out the [Easy Install Documentation](https://github.com/frappe/bench/blob/develop/docs/easy_install.md).
-
+- Create an Issue in this repository with the log file attached.
 
 ### Manual Installation
 
@@ -128,11 +131,6 @@ You'll have to set up the system dependencies required for setting up a Frappe E
 ```sh
 $ pip install frappe-bench
 ```
-
-For more extensive distribution-dependent documentation, check out the following guides:
-
- - [Hitchhiker's Guide to Installing Frappe on Linux](https://github.com/frappe/frappe/wiki/The-Hitchhiker%27s-Guide-to-Installing-Frappe-on-Linux)
- - [Hitchhiker's Guide to Installing Frappe on MacOS](https://github.com/frappe/bench/wiki/Setting-up-a-Mac-for-Frappe-ERPNext-Development)
 
 
 ## Basic Usage
@@ -187,22 +185,6 @@ For more in-depth information on commands and their usage, follow [Commands and 
 ## Custom Bench Commands
 
 If you wish to extend the capabilities of bench with your own custom Frappe Application, you may follow [Adding Custom Bench Commands](https://github.com/frappe/bench/blob/develop/docs/bench_custom_cmd.md).
-
-
-## Bench Manager
-
-[Bench Manager](https://github.com/frappe/bench_manager) is a GUI frontend for Bench with the same functionalties. You can install it by executing the following command:
-
-```sh
-$ bench setup manager
-```
-
- - **Note:** This will create a new site to setup Bench Manager, if you want to set it up on an existing site, run the following commands:
-
-	```sh
-	$ bench get-app https://github.com/frappe/bench_manager.git
-	$ bench --site <sitename> install-app bench_manager
-	```
 
 
 ## Guides
