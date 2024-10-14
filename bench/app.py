@@ -232,6 +232,7 @@ class App(AppMeta):
 	def install(
 		self,
 		skip_assets=False,
+		skip_frontend=False,
 		verbose=False,
 		resolved=False,
 		restart_bench=True,
@@ -257,6 +258,7 @@ class App(AppMeta):
 			bench_path=self.bench.name,
 			verbose=verbose,
 			skip_assets=skip_assets,
+			skip_frontend=skip_frontend,
 			restart_bench=restart_bench,
 			resolution=self.local_resolution,
 			using_cached=using_cached,
@@ -658,6 +660,7 @@ def get_app(
 	branch=None,
 	bench_path=".",
 	skip_assets=False,
+	skip_frontend=False,
 	verbose=False,
 	overwrite=False,
 	soft_link=False,
@@ -738,6 +741,7 @@ def get_app(
 			resolution,
 			bench_path=bench_path,
 			skip_assets=skip_assets,
+			skip_frontend=skip_frontend,
 			verbose=verbose,
 		)
 		return
@@ -774,7 +778,7 @@ def get_app(
 		or overwrite
 		or click.confirm("Do you want to reinstall the existing application?")
 	):
-		app.install(verbose=verbose, skip_assets=skip_assets, restart_bench=restart_bench)
+		app.install(verbose=verbose, skip_assets=skip_assets,skip_frontend=skip_frontend, restart_bench=restart_bench)
 
 	app.set_cache(compress_artifacts)
 
@@ -784,6 +788,7 @@ def install_resolved_deps(
 	resolution,
 	bench_path=".",
 	skip_assets=False,
+	skip_frontend=False,
 	verbose=False,
 ):
 	from bench.utils.app import check_existing_dir
@@ -884,6 +889,7 @@ def install_app(
 	no_cache=False,
 	restart_bench=True,
 	skip_assets=False,
+	skip_frontend=False,
 	resolution=UNSET_ARG,
 	using_cached=False,
 ):
@@ -913,7 +919,7 @@ def install_app(
 	if conf.get("developer_mode"):
 		install_python_dev_dependencies(apps=app, bench_path=bench_path, verbose=verbose)
 
-	if not using_cached and os.path.exists(os.path.join(app_path, "package.json")):
+	if not skip_frontend and not using_cached and os.path.exists(os.path.join(app_path, "package.json")):
 		yarn_install = "yarn install --check-files"
 		if verbose:
 			yarn_install += " --verbose"
